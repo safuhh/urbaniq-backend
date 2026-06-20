@@ -18,7 +18,7 @@ export interface IProperty extends Document {
   amenities: string[];
   images: string[];
   status: 'Available' | 'Pending' | 'Sold' | 'Rented';
-  propertyType: 'Villa' | 'Apartment' | 'Penthouse' | 'Commercial' | 'Townhouse';
+  propertyType: 'Villa' | 'Apartment' | 'Penthouse' | 'Commercial' | 'Townhouse' | 'Land';
   ownerId: mongoose.Types.ObjectId;
   agentId?: mongoose.Types.ObjectId;
 }
@@ -48,7 +48,7 @@ const PropertySchema: Schema = new Schema(
     },
     propertyType: {
       type: String,
-      enum: ['Villa', 'Apartment', 'Penthouse', 'Commercial', 'Townhouse'],
+      enum: ['Villa', 'Apartment', 'Penthouse', 'Commercial', 'Townhouse', 'Land'],
       required: true,
     },
     ownerId: {
