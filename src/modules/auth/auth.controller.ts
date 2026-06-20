@@ -2,10 +2,40 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../user/user.model';
 
-const generateToken = (id: string) => {
+const generateAccessToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', {
-    expiresIn: '30d',
+    expiresIn: '15m',
   });
+};
+
+const generateRefreshToken = (id: string) => {
+  return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret', {
+    expiresIn: '7d',
+  });
+};
+
+const sendTokenResponse = (user: any, statusCode: number, res: Response) => {
+  const accessToken = generateAccessToken(user._id.toString());
+  const refreshToken = generateRefreshToken(user._id.toString());
+
+  // Set refresh token in HttpOnly cookie
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict' as const,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  };
+
+  res.status(statusCode)
+    .cookie('refreshToken', refreshToken, cookieOptions)
+    .json({
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      token: accessToken,
+    });
 };
 
 export const registerUser = async (req: Request, res: Response) => {
@@ -27,14 +57,7 @@ export const registerUser = async (req: Request, res: Response) => {
     });
 
     if (user) {
-      res.status(201).json({
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id.toString()),
-      });
+      sendTokenResponse(user, 201, res);
     } else {
       res.status(400).json({ message: 'Invalid user data' });
     }
@@ -51,14 +74,7 @@ export const loginUser = async (req: Request, res: Response) => {
     const user = await User.findOne({ email });
 
     if (user && (await user.comparePassword(password))) {
-      res.json({
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id.toString()),
-      });
+      sendTokenResponse(user, 200, res);
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -66,6 +82,36 @@ export const loginUser = async (req: Request, res: Response) => {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
+};
+
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    const rfToken = req.cookies.refreshToken;
+    if (!rfToken) {
+      return res.status(401).json({ message: 'No refresh token provided' });
+    }
+
+    const decoded: any = jwt.verify(rfToken, process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret');
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+
+    const newAccessToken = generateAccessToken(user._id.toString());
+    res.json({ token: newAccessToken });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(401).json({ message: 'Invalid or expired refresh token' });
+  }
+};
+
+export const logout = async (req: Request, res: Response) => {
+  res.cookie('refreshToken', '', {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+  res.json({ message: 'Logged out successfully' });
 };
 
 // Google OAuth stub

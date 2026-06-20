@@ -5,11 +5,12 @@ import Property from './property.model';
 // @route   GET /api/properties
 export const getProperties = async (req: Request, res: Response) => {
   try {
-    const { type, minPrice, maxPrice, city } = req.query;
+    const { type, minPrice, maxPrice, city, ownerId } = req.query;
     let query: any = {};
 
     if (type) query.propertyType = type;
     if (city) query['location.city'] = new RegExp(city as string, 'i');
+    if (ownerId) query.ownerId = ownerId;
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
